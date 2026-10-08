@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "gdeyoung.ultrawide-bar",
+  "name": "Ultrawide Bar",
+  "version": "0.1.0",
+  "author": "Greg DeYoung",
+  "license": "MIT",
+  "description": "Fork of the stock Omarchy bar with an opt-in partial width (center-anchored) for ultrawide monitors. Set bar.widthPercent in shell.json.",
+  "kinds": [
+    "bar"
+  ],
+  "entryPoints": {
+    "bar": "Bar.qml"
+  }
+}

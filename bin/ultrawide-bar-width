@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# gdeyoung.ultrawide-bar: set the active bar's width percentage (center-anchored).
+# 100 = full width (stock behavior). Requires gdeyoung.ultrawide-bar to be the
+# active bar (omarchy bar use gdeyoung.ultrawide-bar); the key is ignored by
+# the stock bar, so setting it is always safe.
+
+set -euo pipefail
+
+source omarchy-shell-config
+
+usage() {
+  cat <<USAGE
+Usage: ultrawide-bar-width <percent>
+
+  percent   20-100. 100 restores full width. Below 100 the bar shrinks to
+            that fraction of screen width, centered on the screen midpoint.
+            Takes effect immediately.
+USAGE
+}
+
+(($# == 1)) || { usage >&2; exit 1; }
+
+PCT="$1"
+[[ $PCT =~ ^[0-9]+$ ]] || { echo "ultrawide-bar-width: percent must be a number" >&2; exit 1; }
+((PCT >= 20 && PCT <= 100)) || { echo "ultrawide-bar-width: percent must be 20-100" >&2; exit 1; }
+
+commit width '.bar.widthPercent = '"$PCT"
+
+echo "bar width set to ${PCT}%$([[ $PCT == 100 ]] || echo ' (centered)')"
