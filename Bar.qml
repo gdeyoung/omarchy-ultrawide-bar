@@ -1293,8 +1293,6 @@ Item {
       repeat: true
       onTriggered: {
         var all = ToplevelManager.toplevels || []
-        var sw = barWindow.screen ? barWindow.screen.width : 0
-        var sh = barWindow.screen ? barWindow.screen.height : 0
         var hit = false
         for (var i = 0; i < all.length && !hit; i++) {
           var t = all[i]
@@ -1303,13 +1301,8 @@ Item {
             var tScreen = t.screen ? String(t.screen.name || "") : ""
             if (tScreen !== "" && tScreen !== barWindow.screenName) continue
           }
-          var states = []
-          try { states = t.toplevelStates || [] } catch (e) { states = [] }
-          for (var s = 0; s < states.length; s++) {
-            if (String(states[s] || "").indexOf("fullscreen") >= 0) { hit = true; break }
-          }
-          if (!hit && sw > 0 && sh > 0 && t.width && t.height
-              && t.width >= sw * 0.98 && t.height >= sh * 0.98) hit = true
+          // WlrToplevel.fullscreen is the compositor-reported state
+          if (t.fullscreen === true) hit = true
         }
         barWindow.screenFullscreen = hit
       }
