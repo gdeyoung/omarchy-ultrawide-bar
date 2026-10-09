@@ -1289,48 +1289,38 @@ Item {
       ? String(barWindow.screen.name) : ""
     property bool screenFullscreen: false
 
-    Process {
-      id: fullscreenProbe
-      command: ["sh", "-c",
-        "hyprctl monitors -j; echo '\\n===SPLIT===\\n'; hyprctl clients -j"]
-      stdout: StdioCollector {
-        onStreamFinished: {
-          var hit = false
-          try {
-            var parts = String(this.text).split("===SPLIT===")
-            var mons = JSON.parse(parts[0])
-            var clients = JSON.parse(parts[1])
-            // resolve this screen's Hyprland monitor index by name
-            var monIdx = -1
-            for (var m = 0; m < mons.length; m++) {
-              if (String(mons[m].name) === barWindow.screenName) {
-                monIdx = mons[m].id
-                break
-              }
-            }
-            for (var i = 0; i < clients.length; i++) {
-              var c = clients[i]
-              if (!c || c.fullscreen !== 1) continue
-              if (monIdx >= 0 && c.monitor !== monIdx) continue
-              hit = true
-              break
-            }
-          } catch (e) { /* keep previous state */ }
-          if (barWindow.screenFullscreen !== hit)
-            console.log("[uw-bar] fullscreen " + (hit ? "detected" : "cleared")
-              + " on " + barWindow.screenName)
-          barWindow.screenFullscreen = hit
-          fullscreenTimer.restart()
-        }
-      }
-    }
-
     Timer {
       id: fullscreenTimer
       interval: 1000
       running: true
-      repeat: false
-      onTriggered: fullscreenProbe.running = true
+      repeat: true
+      onTriggered: {
+        // ToplevelManager.toplevels is an ObjectModel: iterate .values.
+        // Verified live: t.fullscreen is true ONLY for real fullscreen —
+        // maximized windows report fullscreen:false (hyprctl code 0, tiled
+        // geometry below the bar), true fullscreen covers the whole output
+        // including the bar area. The toplevel list mutates in place, which
+        // does not re-evaluate var bindings — a 1s probe is cheap and correct.
+        var tm = ToplevelManager.toplevels
+        var ts = tm ? (tm.values !== undefined ? tm.values : null) : null
+        if (!ts) return
+        var hit = false
+        var mon = barWindow.screenName
+        for (var i = 0; i < ts.length; i++) {
+          var t = ts[i]
+          if (!t) continue
+          if (mon !== "") {
+            var tScreen = t.screen ? String(t.screen.name || "") : ""
+            if (tScreen !== "" && tScreen !== mon) continue
+          }
+          if (t.fullscreen === true) { hit = true; break }
+        }
+        if (barWindow.screenFullscreen !== hit) {
+          console.log("[uw-bar] fullscreen " + (hit ? "detected" : "cleared")
+            + " on " + mon)
+        }
+        barWindow.screenFullscreen = hit
+      }
     }
 
     margins {
