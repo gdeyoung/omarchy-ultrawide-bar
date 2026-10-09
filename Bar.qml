@@ -1278,42 +1278,41 @@ Item {
       window: barWindow
     }
 
-    // Fullscreen detection for this screen: a foreign-toplevel whose size
-    // covers the whole output AND whose "fullscreen" state is set. Wlroots
-    // does not always mark fullscreen in toplevel states, so the fallback
-    // is geometric: toplevel bounds == screen bounds.
+    // Fullscreen detection for this screen: a foreign-toplevel whose "fullscreen"
+    // state is set, or (wlroots doesn't always flag it) whose geometry covers the
+    // whole output. Polled: the toplevel list mutates in place, which does not
+    // re-evaluate var bindings — a 1s probe is cheap and always correct.
     readonly property string screenName: barWindow.screen
       && barWindow.screen.name !== undefined
       ? String(barWindow.screen.name) : ""
-    readonly property var screenToplevels: {
-      var all = ToplevelManager.toplevels || []
-      var mine = []
-      for (var i = 0; i < all.length; i++) {
-        var t = all[i]
-        if (!t) continue
-        var tScreen = t.screen ? String(t.screen.name || "") : ""
-        if (tScreen === String(barWindow.screenName)) mine.push(t)
-      }
-      return mine
-    }
-    readonly property bool screenFullscreen: {
-      var tops = screenToplevels
-      for (var i = 0; i < tops.length; i++) {
-        var t = tops[i]
-        var flagged = false
-        var states = t.toplevelStates || []
-        for (var s = 0; s < states.length; s++) {
-          var st = String(states[s] || "")
-          if (st.indexOf("fullscreen") >= 0) flagged = true
+    property bool screenFullscreen: false
+
+    Timer {
+      interval: 1000
+      running: true
+      repeat: true
+      onTriggered: {
+        var all = ToplevelManager.toplevels || []
+        var sw = barWindow.screen ? barWindow.screen.width : 0
+        var sh = barWindow.screen ? barWindow.screen.height : 0
+        var hit = false
+        for (var i = 0; i < all.length && !hit; i++) {
+          var t = all[i]
+          if (!t) continue
+          if (barWindow.screenName !== "") {
+            var tScreen = t.screen ? String(t.screen.name || "") : ""
+            if (tScreen !== "" && tScreen !== barWindow.screenName) continue
+          }
+          var states = []
+          try { states = t.toplevelStates || [] } catch (e) { states = [] }
+          for (var s = 0; s < states.length; s++) {
+            if (String(states[s] || "").indexOf("fullscreen") >= 0) { hit = true; break }
+          }
+          if (!hit && sw > 0 && sh > 0 && t.width && t.height
+              && t.width >= sw * 0.98 && t.height >= sh * 0.98) hit = true
         }
-        if (flagged) return true
-        // geometric fallback: covers the whole screen
-        if (t.width && t.height && barWindow.screen) {
-          var sw = barWindow.screen.width, sh = barWindow.screen.height
-          if (sw > 0 && sh > 0 && t.width >= sw * 0.98 && t.height >= sh * 0.98) return true
-        }
+        barWindow.screenFullscreen = hit
       }
-      return false
     }
 
     margins {
