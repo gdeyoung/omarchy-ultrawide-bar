@@ -3,6 +3,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
+import QtQml
 import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
@@ -556,8 +557,11 @@ Item {
   readonly property int barSize: vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
   // ultrawide fork: 100 = stock full-width; <100 = centered partial width
   property int widthPercent: 100
+  property var widthByMonitor: ({})
   // opt-in: also auto-hide the full-width bar over fullscreen windows
   property bool fullscreenAutoHide: false
+  // Edge-peek: pixels of a hidden bar left on-screen as a hover trigger.
+  readonly property int peekZone: Math.max(2, Math.round(Style.space(2)))
 
   function normalizePosition(value) {
     return BarModel.normalizePosition(value)
@@ -589,6 +593,7 @@ Item {
     setRequestedTransparency(config.transparent === true)
     centerAnchor = Util.canonicalWidgetId(config.centerAnchor || "")
     applyWidthPercent(config.widthPercent)
+    applyWidthByMonitor(config.widthByMonitor)
     applyFullscreenAutoHide(config.fullscreenAutoHide)
 
     // layoutEntries feeds plain JS arrays to the module Repeaters, and QML
@@ -614,6 +619,24 @@ Item {
     var pct = Math.round(Number(value))
     if (!isFinite(pct) || pct >= 100 || pct < 20) pct = 100
     widthPercent = pct
+  }
+
+  // widthByMonitor: { "<monitor-name>": 20-100 } — per-screen override of
+  // widthPercent, resolved by each BarPanel against its own screen.name.
+  // Typical use: full-width bar on the laptop panel, partial width on a
+  // docked ultrawide, simultaneously. Unknown names fall back to the global.
+  function widthPercentFor(name) {
+    var map = Util.isPlainObject(widthByMonitor) ? widthByMonitor : {}
+    var key = String(name || "")
+    if (key !== "" && map[key] !== undefined) {
+      var pct = Math.round(Number(map[key]))
+      if (isFinite(pct) && pct >= 20 && pct < 100) return pct
+    }
+    return widthPercent
+  }
+
+  function applyWidthByMonitor(value) {
+    widthByMonitor = Util.isPlainObject(value) ? value : {}
   }
 
   function applyFullscreenAutoHide(value) {
@@ -1270,8 +1293,22 @@ Item {
     // keeps the surface alive, so showing is only a margin change.
     visible: !remapGuard.remapping
     readonly property bool effectiveHidden: root.barHidden
-      || (screenFullscreen && (root.widthPercent < 100 || root.fullscreenAutoHide))
+      || (screenFullscreen && (panelWidthPercent < 100 || root.fullscreenAutoHide))
     exclusionMode: effectiveHidden ? ExclusionMode.Ignore : ExclusionMode.Auto
+    // Peek reveal: hidden-by-fullscreen + edge hover = show as overlay.
+    readonly property bool showAsOverlay: effectiveHidden && peeking
+
+    // ---- ultrawide fork: bar settings popup (right-click empty bar) ----
+    property bool settingsOpen: false
+
+    function mutateBarConfig(mutator) {
+      if (root.shell && typeof root.shell.mutateShellConfig === "function") {
+        root.shell.mutateShellConfig(function(config) {
+          if (!Util.isPlainObject(config.bar)) config.bar = {}
+          mutator(config.bar)
+        })
+      }
+    }
 
     ScreenMoveRemap {
       id: remapGuard
@@ -1288,6 +1325,15 @@ Item {
       && barWindow.screen.name !== undefined
       ? String(barWindow.screen.name) : ""
     property bool screenFullscreen: false
+    // Per-monitor width: this panel's override of the global widthPercent.
+    readonly property int panelWidthPercent: root.widthPercentFor(screenName)
+
+    // Edge-peek: when hidden under fullscreen, a thin strip at the screen
+    // edge keeps taking pointer events; hovering it reveals the bar as an
+    // overlay (exclusion stays ignored so the fullscreen window keeps its
+    // space). Leaving the bar re-parks it. Peek is display-only; clicks pass
+    // to widgets normally, which is fine — the user asked to see the bar.
+    property bool peeking: false
 
     Timer {
       id: fullscreenTimer
@@ -1317,24 +1363,30 @@ Item {
         }
         if (barWindow.screenFullscreen !== hit) {
           console.log("[uw-bar] fullscreen " + (hit ? "detected" : "cleared")
-            + " on " + mon)
+            + " on " + barWindow.screenName)
         }
         barWindow.screenFullscreen = hit
+        // Fullscreen gone: peek state must not outlive the hide it belongs to.
+        if (!hit) barWindow.peeking = false
       }
     }
 
     margins {
-      top: barWindow.effectiveHidden && root.position === "top" ? -root.barSize : 0
-      bottom: barWindow.effectiveHidden && root.position === "bottom" ? -root.barSize : 0
-      left: barWindow.effectiveHidden && root.position === "left" ? -root.barSize : 0
-      right: barWindow.effectiveHidden && root.position === "right" ? -root.barSize : 0
+      // Peek-aware parking: hide leaves a slim edge strip (peekZone) on
+      // screen instead of parking fully off-screen, so the pointer can still
+      // find the bar. Hovering the strip slides the bar back in as an
+      // overlay (showAsOverlay); leaving re-parks it.
+      top: barWindow.effectiveHidden && root.position === "top" && !barWindow.showAsOverlay ? -(root.barSize - root.peekZone) : 0
+      bottom: barWindow.effectiveHidden && root.position === "bottom" && !barWindow.showAsOverlay ? -(root.barSize - root.peekZone) : 0
+      left: barWindow.effectiveHidden && root.position === "left" && !barWindow.showAsOverlay ? -(root.barSize - root.peekZone) : 0
+      right: barWindow.effectiveHidden && root.position === "right" && !barWindow.showAsOverlay ? -(root.barSize - root.peekZone) : 0
     }
 
     anchors {
       top: root.position === "top" || root.vertical
       bottom: root.position === "bottom" || root.vertical
-      left: root.position === "left" || (!root.vertical && root.widthPercent >= 100)
-      right: root.position === "right" || (!root.vertical && root.widthPercent >= 100)
+      left: root.position === "left" || (!root.vertical && barWindow.panelWidthPercent >= 100)
+      right: root.position === "right" || (!root.vertical && barWindow.panelWidthPercent >= 100)
     }
 
     // Partial width: only the screen-relative edge (and top/bottom) stays
@@ -1342,8 +1394,8 @@ Item {
     // between the two un-anchored horizontal edges. Vertical bars and the
     // full-width default keep the stock anchoring above.
     implicitWidth: root.vertical ? root.barSize
-      : (root.widthPercent < 100
-        ? Math.round(screen.width * root.widthPercent / 100)
+      : (barWindow.panelWidthPercent < 100
+        ? Math.round(screen.width * barWindow.panelWidthPercent / 100)
         : 0)
     implicitHeight: root.vertical ? 0 : root.barSize
     color: root.transparent ? "transparent" : root.background
@@ -1359,7 +1411,12 @@ Item {
       // hovered while the pointer is over a widget, where a sibling would lose
       // hover to the section the pointer entered.
       HoverHandler {
-        onHoveredChanged: root.setBarHovered(hovered)
+        onHoveredChanged: {
+          root.setBarHovered(hovered)
+          // Edge-peek: hovering the parked strip (or the revealed bar)
+          // keeps the peek open; leaving re-parks.
+          if (barWindow.effectiveHidden) barWindow.peeking = hovered
+        }
         // Unplugging a monitor destroys its bar without a leave event, which
         // would strand this surface's tally and hold the peek open for good.
         Component.onDestruction: if (hovered) root.setBarHovered(false)
@@ -1430,9 +1487,154 @@ Item {
       }
     }
 
+    // ---- ultrawide fork: settings popup (right-click empty bar space) ----
+    PopupWindow {
+      id: settingsWindow
+
+      visible: barWindow.settingsOpen
+      color: "transparent"
+      implicitWidth: Math.ceil(settingsCard.implicitWidth)
+      implicitHeight: Math.ceil(settingsCard.implicitHeight)
+
+      anchor {
+        id: settingsAnchor
+        window: barWindow
+        adjustment: PopupAdjustment.Slide
+        edges: Edges.Top | Edges.Left
+        gravity: Edges.Bottom | Edges.Right
+
+        onAnchoring: {
+          var pw = settingsWindow.implicitWidth
+          var ph = settingsWindow.implicitHeight
+          // Open below the bar's horizontal center (above a bottom bar),
+          // clamped by the compositor via Slide adjustment.
+          settingsAnchor.rect.x = Math.round(barWindow.width / 2 - pw / 2)
+          settingsAnchor.rect.y = root.position === "bottom" ? -ph - 6 : root.barSize + 6
+        }
+      }
+
+      BorderSurface {
+        id: settingsCard
+        implicitWidth: settingsColumn.implicitWidth + Style.space(24)
+        implicitHeight: settingsColumn.implicitHeight + Style.space(20)
+        color: Color.popups.background
+        borderSpec: Border.surfaceSpec("popups", "border", Color.popups.border, 1)
+        radius: Style.cornerRadius
+
+        Column {
+          id: settingsColumn
+          anchors.centerIn: parent
+          width: Style.space(280)
+          spacing: Style.space(8)
+
+          Text {
+            text: "Bar"
+            color: root.barForeground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+            font.bold: true
+          }
+
+          Text {
+            text: "Width — " + settingsWidthSlider.liveValue + "%"
+            color: root.barForeground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+          }
+
+          PanelSlider {
+            id: settingsWidthSlider
+            width: parent.width
+            bar: QtObject {
+              property color foreground: root.barForeground
+              property color background: root.background
+            }
+            minimum: 20
+            maximum: 100
+            step: 5
+            integer: true
+            value: root.widthPercentFor(barWindow.screenName)
+            onReleased: function(next) {
+              var pct = Math.round(next)
+              barWindow.mutateBarConfig(function(bar) {
+                // Write per-monitor when this screen has an override (or the
+                // global is at 100 but this monitor is narrower) so a laptop
+                // next to an ultrawide isn't dragged around by one slider.
+                var map = Util.isPlainObject(bar.widthByMonitor) ? bar.widthByMonitor : {}
+                var mon = barWindow.screenName
+                if (mon !== "" && map[mon] !== undefined) map[mon] = pct
+                else bar.widthPercent = pct
+                bar.widthByMonitor = map
+              })
+            }
+          }
+
+          Text {
+            text: root.widthPercentFor(barWindow.screenName) >= 100
+              ? "Full width (stock behavior)"
+              : root.widthPercentFor(barWindow.screenName) + "% of screen, centered"
+              + (barWindow.screenName !== "" ? " — " + barWindow.screenName : "")
+            color: root.barForeground
+            opacity: 0.7
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
+            width: parent.width
+          }
+
+          Button {
+            width: parent.width
+            foreground: root.barForeground
+            fontFamily: root.fontFamily
+            text: barWindow.screenName !== ""
+                && root.widthByMonitor[barWindow.screenName] !== undefined
+              ? "Reset " + barWindow.screenName + " to global width"
+              : "Set this monitor (" + (barWindow.screenName || "?") + ") to 50%"
+            onClicked: {
+              if (barWindow.screenName === "") return
+              barWindow.mutateBarConfig(function(bar) {
+                var map = Util.isPlainObject(bar.widthByMonitor) ? bar.widthByMonitor : {}
+                if (map[barWindow.screenName] !== undefined)
+                  delete map[barWindow.screenName]
+                else
+                  map[barWindow.screenName] = 50
+                bar.widthByMonitor = map
+              })
+            }
+          }
+
+          Button {
+            width: parent.width
+            foreground: root.barForeground
+            fontFamily: root.fontFamily
+            text: root.fullscreenAutoHide
+              ? "Fullscreen auto-hide: on (all widths)"
+              : "Fullscreen auto-hide: partial width only"
+            onClicked: {
+              barWindow.mutateBarConfig(function(bar) {
+                bar.fullscreenAutoHide = !root.fullscreenAutoHide
+              })
+            }
+          }
+
+          Text {
+            text: "Right-click empty bar space to toggle this panel. omarchy bar reset restores the stock bar."
+            color: root.barForeground
+            opacity: 0.5
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
+            width: parent.width
+          }
+        }
+      }
+    }
+
     Component {
       id: horizontalBar
 
+      // Right-click empty bar space → settings popup. Single root: the
+      // background area wraps the sections and owns the right-click.
       Item {
         anchors.fill: parent
 
@@ -1449,9 +1651,21 @@ Item {
           anchors.rightMargin: Style.space(8)
           anchors.verticalCenter: parent.verticalCenter
         }
+
+        // Above the sections (they don't accept right-click; widgets handle
+        // their own), below popups. Only fires on empty space because
+        // widgets' own handlers accept their clicks first.
+        MouseArea {
+          anchors.fill: parent
+          acceptedButtons: Qt.RightButton
+          z: 5
+          onClicked: function(mouse) {
+            mouse.accepted = true
+            barWindow.settingsOpen = !barWindow.settingsOpen
+          }
+        }
       }
     }
-
     Component {
       id: verticalBar
 

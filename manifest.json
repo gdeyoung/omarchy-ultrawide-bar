@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "gdeyoung.ultrawide-bar",
   "name": "Ultrawide Bar",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Greg DeYoung",
   "license": "MIT",
-  "description": "Fork of the stock Omarchy bar: opt-in partial width (center-anchored) for ultrawide monitors, fullscreen auto-hide, and window-mode helper. Set bar.widthPercent in shell.json.",
+  "description": "Fork of the stock Omarchy bar: partial width (center-anchored) for ultrawides, per-monitor widths, fullscreen auto-hide with edge-peek, right-click settings popup.",
   "kinds": [
     "bar"
   ],
