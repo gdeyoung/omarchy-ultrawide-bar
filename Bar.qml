@@ -1278,34 +1278,59 @@ Item {
       window: barWindow
     }
 
-    // Fullscreen detection for this screen: a foreign-toplevel whose "fullscreen"
-    // state is set, or (wlroots doesn't always flag it) whose geometry covers the
-    // whole output. Polled: the toplevel list mutates in place, which does not
-    // re-evaluate var bindings — a 1s probe is cheap and always correct.
+    // Fullscreen detection for this screen. Hyprland's JSON reports
+    // fullscreen: 1 = true fullscreen, 2 = maximized (must NOT hide the bar),
+    // 0 = none. The wayland foreign-toplevel state conflates maximize with
+    // fullscreen, so we poll the compositor's own client list and check the
+    // mapped windows on this bar's monitor only. In-place list mutation makes
+    // bindings unreliable — a 1s probe is cheap and always correct.
     readonly property string screenName: barWindow.screen
       && barWindow.screen.name !== undefined
       ? String(barWindow.screen.name) : ""
     property bool screenFullscreen: false
 
+    Process {
+      id: fullscreenProbe
+      command: ["sh", "-c",
+        "hyprctl monitors -j; echo '\\n===SPLIT===\\n'; hyprctl clients -j"]
+      stdout: StdioCollector {
+        onStreamFinished: {
+          var hit = false
+          try {
+            var parts = String(this.text).split("===SPLIT===")
+            var mons = JSON.parse(parts[0])
+            var clients = JSON.parse(parts[1])
+            // resolve this screen's Hyprland monitor index by name
+            var monIdx = -1
+            for (var m = 0; m < mons.length; m++) {
+              if (String(mons[m].name) === barWindow.screenName) {
+                monIdx = mons[m].id
+                break
+              }
+            }
+            for (var i = 0; i < clients.length; i++) {
+              var c = clients[i]
+              if (!c || c.fullscreen !== 1) continue
+              if (monIdx >= 0 && c.monitor !== monIdx) continue
+              hit = true
+              break
+            }
+          } catch (e) { /* keep previous state */ }
+          if (barWindow.screenFullscreen !== hit)
+            console.log("[uw-bar] fullscreen " + (hit ? "detected" : "cleared")
+              + " on " + barWindow.screenName)
+          barWindow.screenFullscreen = hit
+          fullscreenTimer.restart()
+        }
+      }
+    }
+
     Timer {
+      id: fullscreenTimer
       interval: 1000
       running: true
-      repeat: true
-      onTriggered: {
-        var all = ToplevelManager.toplevels || []
-        var hit = false
-        for (var i = 0; i < all.length && !hit; i++) {
-          var t = all[i]
-          if (!t) continue
-          if (barWindow.screenName !== "") {
-            var tScreen = t.screen ? String(t.screen.name || "") : ""
-            if (tScreen !== "" && tScreen !== barWindow.screenName) continue
-          }
-          // WlrToplevel.fullscreen is the compositor-reported state
-          if (t.fullscreen === true) hit = true
-        }
-        barWindow.screenFullscreen = hit
-      }
+      repeat: false
+      onTriggered: fullscreenProbe.running = true
     }
 
     margins {
