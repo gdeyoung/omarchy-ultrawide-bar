@@ -556,6 +556,8 @@ Item {
   readonly property int barSize: vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
   // ultrawide fork: 100 = stock full-width; <100 = centered partial width
   property int widthPercent: 100
+  // opt-in: also auto-hide the full-width bar over fullscreen windows
+  property bool fullscreenAutoHide: false
 
   function normalizePosition(value) {
     return BarModel.normalizePosition(value)
@@ -587,6 +589,7 @@ Item {
     setRequestedTransparency(config.transparent === true)
     centerAnchor = Util.canonicalWidgetId(config.centerAnchor || "")
     applyWidthPercent(config.widthPercent)
+    applyFullscreenAutoHide(config.fullscreenAutoHide)
 
     // layoutEntries feeds plain JS arrays to the module Repeaters, and QML
     // cannot diff those: reassigning layoutConfig rebuilds every widget on
@@ -611,6 +614,10 @@ Item {
     var pct = Math.round(Number(value))
     if (!isFinite(pct) || pct >= 100 || pct < 20) pct = 100
     widthPercent = pct
+  }
+
+  function applyFullscreenAutoHide(value) {
+    fullscreenAutoHide = value === true
   }
 
   function applySettingsDelta(delta) {
@@ -1248,24 +1255,72 @@ Item {
   component BarPanel: PanelWindow {
     id: barWindow
 
+    // Fullscreen auto-hide (partial-width polish): when any toplevel on THIS
+    // screen is truly fullscreen, park the bar off-screen and drop the
+    // exclusion so the window owns the whole display — mirrors what the
+    // manual bar-off toggle does, but automatic and per-screen. Full-width
+    // stock behavior keeps the bar over fullscreen (unchanged upstream look)
+    // unless fullscreenAutoHide is enabled; partial width always auto-hides
+    // because a floating bar fragment over fullscreen content looks broken.
+
     // Hiding parks the bar just past its screen edge instead of unmapping it.
     // Unmapping frees the layer surface and the whole scene graph, so every
     // reveal has to rebuild them — new surface, re-shaped glyphs, re-uploaded
     // textures — which measures ~150ms against ~20ms to tear down. Parking
     // keeps the surface alive, so showing is only a margin change.
     visible: !remapGuard.remapping
-    exclusionMode: root.barHidden ? ExclusionMode.Ignore : ExclusionMode.Auto
+    readonly property bool effectiveHidden: root.barHidden
+      || (screenFullscreen && (root.widthPercent < 100 || root.fullscreenAutoHide))
+    exclusionMode: effectiveHidden ? ExclusionMode.Ignore : ExclusionMode.Auto
 
     ScreenMoveRemap {
       id: remapGuard
       window: barWindow
     }
 
+    // Fullscreen detection for this screen: a foreign-toplevel whose size
+    // covers the whole output AND whose "fullscreen" state is set. Wlroots
+    // does not always mark fullscreen in toplevel states, so the fallback
+    // is geometric: toplevel bounds == screen bounds.
+    readonly property string screenName: barWindow.screen
+      && barWindow.screen.name !== undefined
+      ? String(barWindow.screen.name) : ""
+    readonly property var screenToplevels: {
+      var all = ToplevelManager.toplevels || []
+      var mine = []
+      for (var i = 0; i < all.length; i++) {
+        var t = all[i]
+        if (!t) continue
+        var tScreen = t.screen ? String(t.screen.name || "") : ""
+        if (tScreen === String(barWindow.screenName)) mine.push(t)
+      }
+      return mine
+    }
+    readonly property bool screenFullscreen: {
+      var tops = screenToplevels
+      for (var i = 0; i < tops.length; i++) {
+        var t = tops[i]
+        var flagged = false
+        var states = t.toplevelStates || []
+        for (var s = 0; s < states.length; s++) {
+          var st = String(states[s] || "")
+          if (st.indexOf("fullscreen") >= 0) flagged = true
+        }
+        if (flagged) return true
+        // geometric fallback: covers the whole screen
+        if (t.width && t.height && barWindow.screen) {
+          var sw = barWindow.screen.width, sh = barWindow.screen.height
+          if (sw > 0 && sh > 0 && t.width >= sw * 0.98 && t.height >= sh * 0.98) return true
+        }
+      }
+      return false
+    }
+
     margins {
-      top: root.barHidden && root.position === "top" ? -root.barSize : 0
-      bottom: root.barHidden && root.position === "bottom" ? -root.barSize : 0
-      left: root.barHidden && root.position === "left" ? -root.barSize : 0
-      right: root.barHidden && root.position === "right" ? -root.barSize : 0
+      top: barWindow.effectiveHidden && root.position === "top" ? -root.barSize : 0
+      bottom: barWindow.effectiveHidden && root.position === "bottom" ? -root.barSize : 0
+      left: barWindow.effectiveHidden && root.position === "left" ? -root.barSize : 0
+      right: barWindow.effectiveHidden && root.position === "right" ? -root.barSize : 0
     }
 
     anchors {

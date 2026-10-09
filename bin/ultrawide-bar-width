@@ -25,6 +25,6 @@ PCT="$1"
 [[ $PCT =~ ^[0-9]+$ ]] || { echo "ultrawide-bar-width: percent must be a number" >&2; exit 1; }
 ((PCT >= 20 && PCT <= 100)) || { echo "ultrawide-bar-width: percent must be 20-100" >&2; exit 1; }
 
-commit width '.bar.widthPercent = '"$PCT"
+commit "$NORMALIZE | .bar.widthPercent = $PCT"
 
 echo "bar width set to ${PCT}%$([[ $PCT == 100 ]] || echo ' (centered)')"
