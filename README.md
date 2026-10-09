@@ -23,12 +23,25 @@ Or from the CLI (writes the same key, live reloads):
 
 Range is clamped to 20-100. Vertical bars ignore it.
 
-**Fullscreen auto-hide** (always on for partial-width bars): when a window on
-the bar's screen goes truly fullscreen, the bar parks itself off-screen and
-drops its exclusion zone so the window owns the whole display; it returns
-within a second of leaving fullscreen. Maximized windows do **not** trigger
-it — only real fullscreen. At 100% width the stock behavior (bar drawn over
-fullscreen) is unchanged unless `bar.fullscreenAutoHide` is set in shell.json.
+**Per-monitor widths**: `bar.widthByMonitor` overrides the global width per
+screen — full-width on the laptop panel and 60% on a docked ultrawide at the
+same time:
+
+    { "bar": { "widthPercent": 100, "widthByMonitor": { "DP-1": 60 } } }
+
+**Fullscreen auto-hide with edge-peek** (always on for partial-width bars):
+when a window on the bar's screen goes truly fullscreen, the bar parks itself
+leaving a 2-pixel strip at the screen edge and drops its exclusion zone so the
+window owns the whole display. Move the pointer to that edge strip and the
+bar slides back in as an overlay (the fullscreen window keeps its space);
+move away and it re-parks. Maximized windows do **not** trigger it — only
+real fullscreen. At 100% width the stock behavior (bar drawn over fullscreen)
+is unchanged unless `bar.fullscreenAutoHide` is set in shell.json.
+
+**Right-click the bar** (empty space) for a settings popup: width slider,
+per-monitor width for the current screen, and the fullscreen auto-hide
+toggle. The same keys the popup writes are documented above, so everything
+is also scriptable.
 
 ## Why a fork
 
