@@ -1914,7 +1914,7 @@ Item {
           entries: root.entriesBefore(centerRoot.entries, root.centerAnchor)
           region: "center"
           anchors.right: settingsGear.left
-          anchors.rightMargin: Style.space(6)
+          anchors.rightMargin: Style.space(16)
           anchors.verticalCenter: centerAnchorModule.verticalCenter
         }
 
@@ -1969,7 +1969,7 @@ Item {
           entries: root.entriesAfter(centerRoot.entries, root.centerAnchor)
           region: "center"
           anchors.left: centerAnchorModule.right
-          anchors.leftMargin: Style.space(6)
+          anchors.leftMargin: Style.space(16)
           anchors.verticalCenter: centerAnchorModule.verticalCenter
         }
       }
