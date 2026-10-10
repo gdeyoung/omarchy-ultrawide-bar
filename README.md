@@ -1,15 +1,16 @@
 # Ultrawide Bar (gdeyoung.ultrawide-bar)
 
-Fork of the stock Omarchy bar with an **opt-in partial width**, for ultrawide
-monitors where a full-width bar puts widgets several feet apart — plus a
-fullscreen auto-hide that gets the bar out of the way of true-fullscreen
-windows (video calls, video playback).
+Fork of the stock Omarchy bar built for ultrawide monitors — partial-width
+centered bar, per-monitor geometry, height control, fullscreen auto-hide with
+edge-peek, and a built-in settings popup.
 
 ## What it changes
 
 Nothing, by default. At `widthPercent: 100` (or unset) it is behaviorally
 identical to the stock `omarchy.bar` — same anchoring, same exclusion strip,
 same rendering.
+
+### Width
 
 Set `bar.widthPercent` in `~/.config/omarchy/shell.json` to shrink the bar to
 that fraction of screen width, **centered on the screen's horizontal
@@ -21,7 +22,7 @@ Or from the CLI (writes the same key, live reloads):
 
     ultrawide-bar-width 60
 
-Range is clamped to 20-100. Vertical bars ignore it.
+Range is clamped to 20–100. Vertical bars ignore it.
 
 **Per-monitor widths**: `bar.widthByMonitor` overrides the global width per
 screen — full-width on the laptop panel and 60% on a docked ultrawide at the
@@ -29,19 +30,39 @@ same time:
 
     { "bar": { "widthPercent": 100, "widthByMonitor": { "DP-1": 60 } } }
 
-**Fullscreen auto-hide with edge-peek** (always on for partial-width bars):
-when a window on the bar's screen goes truly fullscreen, the bar parks itself
-leaving a 2-pixel strip at the screen edge and drops its exclusion zone so the
-window owns the whole display. Move the pointer to that edge strip and the
-bar slides back in as an overlay (the fullscreen window keeps its space);
-move away and it re-parks. Maximized windows do **not** trigger it — only
-real fullscreen. At 100% width the stock behavior (bar drawn over fullscreen)
-is unchanged unless `bar.fullscreenAutoHide` is set in shell.json.
+### Height
 
-**Right-click the bar** (empty space) for a settings popup: width slider,
-per-monitor width for the current screen, and the fullscreen auto-hide
-toggle. The same keys the popup writes are documented above, so everything
-is also scriptable.
+`bar.barHeight` sets bar thickness in pixels (16–64), for big monitors where
+the 26px default feels thin — or small screens where every pixel counts:
+
+    { "bar": { "barHeight": 40 } }
+
+Unset = theme default (26px horizontal / 28px vertical).
+
+### Fullscreen auto-hide with edge-peek
+
+Always on for partial-width bars: when a window on the bar's screen goes
+truly fullscreen, the bar parks itself leaving a 2-pixel strip at the screen
+edge and drops its exclusion zone so the window owns the whole display. Move
+the pointer to that edge strip and the bar slides back in as an overlay (the
+fullscreen window keeps its space); move away and it re-parks. Maximized
+windows do **not** trigger it — only real fullscreen. At 100% width the
+stock behavior (bar drawn over fullscreen) is unchanged unless
+`bar.fullscreenAutoHide` is set.
+
+### Settings popup
+
+**Right-click empty bar space** (or click the hover-revealed gear at the end
+of the indicator group, left of the clock) for a themed settings panel:
+
+- **Position** — top / bottom / left / right
+- **Size** — width, per-monitor width for the current screen, bar height
+- **Behavior** — transparent bar, fullscreen auto-hide
+
+Everything the popup writes is a documented shell.json key, so all of it is
+also scriptable. Toggle it from a keybind too:
+
+    omarchy-shell omarchy.bar toggleSettings
 
 ## Why a fork
 
