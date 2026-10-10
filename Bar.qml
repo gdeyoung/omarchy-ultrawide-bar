@@ -554,7 +554,13 @@ Item {
   }
 
   readonly property bool vertical: position === "left" || position === "right"
-  readonly property int barSize: vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
+  // ultrawide fork: config-driven bar thickness. 0 = theme default (26px
+  // horizontal / 28 vertical). Clamped so a bad value can't make the bar
+  // unusable. Applied as a multipler-aware override of the style token.
+  property int barHeightOverride: 0
+  readonly property int barSize: vertical
+    ? (barHeightOverride > 0 ? Math.max(16, Math.min(64, barHeightOverride)) : Style.bar.sizeVertical)
+    : (barHeightOverride > 0 ? Math.max(16, Math.min(64, barHeightOverride)) : Style.bar.sizeHorizontal)
   // ultrawide fork: 100 = stock full-width; <100 = centered partial width
   property int widthPercent: 100
   property var widthByMonitor: ({})
@@ -595,6 +601,7 @@ Item {
     applyWidthPercent(config.widthPercent)
     applyWidthByMonitor(config.widthByMonitor)
     applyFullscreenAutoHide(config.fullscreenAutoHide)
+    applyBarHeightOverride(config.barHeight)
 
     // layoutEntries feeds plain JS arrays to the module Repeaters, and QML
     // cannot diff those: reassigning layoutConfig rebuilds every widget on
@@ -641,6 +648,10 @@ Item {
 
   function applyFullscreenAutoHide(value) {
     fullscreenAutoHide = value === true
+  }
+
+  function applyBarHeightOverride(value) {
+    barHeightOverride = Math.max(0, Math.min(64, parseInt(value, 10) || 0))
   }
 
   function applySettingsDelta(delta) {
@@ -1235,7 +1246,14 @@ Item {
     function syncHidden(): void {
       barHiddenProbe.running = true
     }
+
+    // Test/debug hook: toggle the settings popup programmatically.
+    function toggleSettings(): void {
+      settingsToggledByIpc = !settingsToggledByIpc
+    }
   }
+
+  property bool settingsToggledByIpc: false
 
   Variants {
     model: Quickshell.screens
@@ -1299,7 +1317,7 @@ Item {
     readonly property bool showAsOverlay: effectiveHidden && peeking
 
     // ---- ultrawide fork: bar settings popup (right-click empty bar) ----
-    property bool settingsOpen: false
+    property bool settingsOpen: root.settingsToggledByIpc
 
     function mutateBarConfig(mutator) {
       if (root.shell && typeof root.shell.mutateShellConfig === "function") {
@@ -1487,7 +1505,7 @@ Item {
       }
     }
 
-    // ---- ultrawide fork: settings popup (right-click empty bar space) ----
+    // ---- ultrawide fork: settings popup (right-click empty bar space or gear) ----
     PopupWindow {
       id: settingsWindow
 
@@ -1515,8 +1533,8 @@ Item {
 
       BorderSurface {
         id: settingsCard
-        implicitWidth: settingsColumn.implicitWidth + Style.space(24)
-        implicitHeight: settingsColumn.implicitHeight + Style.space(20)
+        implicitWidth: settingsColumn.implicitWidth + Style.space(48)
+        implicitHeight: settingsColumn.implicitHeight + Style.space(32)
         color: Color.popups.background
         borderSpec: Border.surfaceSpec("popups", "border", Color.popups.border, 1)
         radius: Style.cornerRadius
@@ -1524,23 +1542,34 @@ Item {
         Column {
           id: settingsColumn
           anchors.centerIn: parent
-          width: Style.space(280)
-          spacing: Style.space(8)
+          width: Style.space(340)
+          spacing: Style.space(14)
 
-          Text {
-            text: "Bar"
-            color: root.barForeground
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
-            font.bold: true
+          // ---- header ------------------------------------------------------
+          Row {
+            width: parent.width
+
+            Text {
+              id: settingsTitle
+              text: "Bar Settings"
+              color: root.barForeground
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.subtitle
+              font.bold: true
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Item {
+              width: parent.width - settingsTitle.implicitWidth
+              height: 1
+            }
           }
 
-          Text {
+          // ---- Position ----------------------------------------------------
+          PanelSectionHeader {
             text: "Position"
-            color: root.barForeground
-            opacity: 0.7
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.bodySmall
+            foreground: root.barForeground
+            fontFamily: root.fontFamily
           }
 
           Row {
@@ -1562,17 +1591,15 @@ Item {
             }
           }
 
-          Button {
-            width: parent.width
+          // ---- Size --------------------------------------------------------
+          PanelSectionHeader {
+            text: "Size"
             foreground: root.barForeground
             fontFamily: root.fontFamily
-            text: root.transparent
-              ? "Transparent bar: on (double-click center also toggles)"
-              : "Transparent bar: off (double-click center also toggles)"
-            onClicked: root.setRequestedTransparency(!root.transparent)
           }
 
           Text {
+            width: parent.width
             text: "Width — " + settingsWidthSlider.liveValue + "%"
             color: root.barForeground
             font.family: root.fontFamily
@@ -1588,93 +1615,130 @@ Item {
             }
             minimum: 20
             maximum: 100
-            step: 5
+            step: 1
+            integer: true
+            value: root.widthPercent
+            onMoved: function(v) { liveValue = v }
+            onReleased: function(value) {
+              barWindow.mutateBarConfig(function(bc) { bc.widthPercent = Math.round(value) })
+            }
+          }
+
+          Text {
+            width: parent.width
+            text: root.widthByMonitor[barWindow.screenName] !== undefined
+              ? "This screen (" + barWindow.screenName + ") — " + settingsScreenSlider.liveValue + "%"
+              : "This screen (" + barWindow.screenName + ") — follows global width"
+            color: root.barForeground
+            opacity: root.widthByMonitor[barWindow.screenName] !== undefined ? 1 : 0.55
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+          }
+
+          PanelSlider {
+            id: settingsScreenSlider
+            width: parent.width
+            bar: QtObject {
+              property color foreground: root.barForeground
+              property color background: root.background
+            }
+            minimum: 20
+            maximum: 100
+            step: 1
             integer: true
             value: root.widthPercentFor(barWindow.screenName)
-            onReleased: function(next) {
-              var pct = Math.round(next)
-              barWindow.mutateBarConfig(function(bar) {
-                // Write per-monitor when this screen has an override (or the
-                // global is at 100 but this monitor is narrower) so a laptop
-                // next to an ultrawide isn't dragged around by one slider.
-                var map = Util.isPlainObject(bar.widthByMonitor) ? bar.widthByMonitor : {}
-                var mon = barWindow.screenName
-                if (mon !== "" && map[mon] !== undefined) map[mon] = pct
-                else bar.widthPercent = pct
-                bar.widthByMonitor = map
+            onMoved: function(v) { liveValue = v }
+            onReleased: function(value) {
+              barWindow.mutateBarConfig(function(bc) {
+                if (!bc.widthByMonitor) bc.widthByMonitor = {}
+                bc.widthByMonitor[barWindow.screenName] = Math.round(value)
               })
             }
           }
 
           Text {
-            text: root.widthPercentFor(barWindow.screenName) >= 100
-              ? "Full width (stock behavior)"
-              : root.widthPercentFor(barWindow.screenName) + "% of screen, centered"
-              + (barWindow.screenName !== "" ? " — " + barWindow.screenName : "")
+            width: parent.width
+            text: root.barHeightOverride > 0
+              ? "Bar height — " + settingsHeightSlider.liveValue + " px"
+              : "Bar height — theme default (" + (root.vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal) + " px)"
             color: root.barForeground
-            opacity: 0.7
             font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            wrapMode: Text.WordWrap
-            width: parent.width
+            font.pixelSize: Style.font.bodySmall
           }
 
-          Button {
+          PanelSlider {
+            id: settingsHeightSlider
             width: parent.width
+            bar: QtObject {
+              property color foreground: root.barForeground
+              property color background: root.background
+            }
+            minimum: 16
+            maximum: 64
+            step: 1
+            integer: true
+            value: root.barHeightOverride > 0 ? root.barHeightOverride : (root.vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal)
+            onMoved: function(v) { liveValue = v }
+            onReleased: function(value) {
+              barWindow.mutateBarConfig(function(bc) { bc.barHeight = Math.round(value) })
+            }
+          }
+
+          // ---- Behavior ----------------------------------------------------
+          PanelSectionHeader {
+            text: "Behavior"
             foreground: root.barForeground
             fontFamily: root.fontFamily
-            text: barWindow.screenName !== ""
-                && root.widthByMonitor[barWindow.screenName] !== undefined
-              ? "Reset " + barWindow.screenName + " to global width"
-              : "Set this monitor (" + (barWindow.screenName || "?") + ") to 50%"
+          }
+
+          Toggle {
+            width: parent.width
+            label: "Transparent bar"
+            description: "Also double-click empty center space"
+            checked: root.transparent
+            foreground: root.barForeground
+            accent: root.barForeground
+            fontFamily: root.fontFamily
+            onClicked: root.setRequestedTransparency(!root.transparent)
+          }
+
+          Toggle {
+            width: parent.width
+            label: "Auto-hide over fullscreen"
+            description: "Always on below 100% width"
+            checked: root.fullscreenAutoHide || root.panelWidthPercent < 100
+            foreground: root.barForeground
+            accent: root.barForeground
+            fontFamily: root.fontFamily
             onClicked: {
-              if (barWindow.screenName === "") return
-              barWindow.mutateBarConfig(function(bar) {
-                var map = Util.isPlainObject(bar.widthByMonitor) ? bar.widthByMonitor : {}
-                if (map[barWindow.screenName] !== undefined)
-                  delete map[barWindow.screenName]
-                else
-                  map[barWindow.screenName] = 50
-                bar.widthByMonitor = map
+              barWindow.mutateBarConfig(function(bc) {
+                bc.fullscreenAutoHide = !root.fullscreenAutoHide
               })
             }
           }
 
-          Button {
-            width: parent.width
-            foreground: root.barForeground
-            fontFamily: root.fontFamily
-            text: root.fullscreenAutoHide
-              ? "Fullscreen auto-hide: on (all widths)"
-              : "Fullscreen auto-hide: partial width only"
-            onClicked: {
-              barWindow.mutateBarConfig(function(bar) {
-                bar.fullscreenAutoHide = !root.fullscreenAutoHide
-              })
-            }
-          }
-
+          // ---- Reset -------------------------------------------------------
           Button {
             width: parent.width
             foreground: root.barForeground
             fontFamily: root.fontFamily
             text: "Reset widths to defaults (100%)"
             onClicked: {
-              barWindow.mutateBarConfig(function(bar) {
-                bar.widthPercent = 100
-                bar.widthByMonitor = {}
+              barWindow.mutateBarConfig(function(bc) {
+                bc.widthPercent = 100
+                bc.widthByMonitor = {}
               })
             }
           }
 
           Text {
-            text: "Right-click empty bar space to toggle this panel. omarchy bar reset restores the stock bar."
+            width: parent.width
+            text: "Right-click empty bar space for this panel. \"omarchy bar reset\" restores the stock bar."
             color: root.barForeground
-            opacity: 0.5
+            opacity: 0.45
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
             wrapMode: Text.WordWrap
-            width: parent.width
           }
         }
       }
@@ -1711,7 +1775,7 @@ Item {
           z: 5
           onClicked: function(mouse) {
             mouse.accepted = true
-            barWindow.settingsOpen = !barWindow.settingsOpen
+            root.settingsToggledByIpc = !root.settingsToggledByIpc
           }
         }
       }
@@ -1959,7 +2023,7 @@ Item {
             cursorShape: Qt.PointingHandCursor
             onClicked: function(mouse) {
               mouse.accepted = true
-              barWindow.settingsOpen = !barWindow.settingsOpen
+              root.settingsToggledByIpc = !root.settingsToggledByIpc
             }
           }
         }
