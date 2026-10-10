@@ -1536,6 +1536,43 @@ Item {
           }
 
           Text {
+            text: "Position"
+            color: root.barForeground
+            opacity: 0.7
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+          }
+
+          Row {
+            width: parent.width
+            spacing: Style.space(4)
+
+            Repeater {
+              model: ["top", "bottom", "left", "right"]
+
+              Button {
+                required property string modelData
+                width: (parent.width - Style.space(12)) / 4
+                text: modelData.charAt(0).toUpperCase() + modelData.slice(1)
+                selected: root.position === modelData
+                foreground: root.barForeground
+                fontFamily: root.fontFamily
+                onClicked: root.setBarPosition(modelData)
+              }
+            }
+          }
+
+          Button {
+            width: parent.width
+            foreground: root.barForeground
+            fontFamily: root.fontFamily
+            text: root.transparent
+              ? "Transparent bar: on (double-click center also toggles)"
+              : "Transparent bar: off (double-click center also toggles)"
+            onClicked: root.setRequestedTransparency(!root.transparent)
+          }
+
+          Text {
             text: "Width — " + settingsWidthSlider.liveValue + "%"
             color: root.barForeground
             font.family: root.fontFamily
@@ -1613,6 +1650,19 @@ Item {
             onClicked: {
               barWindow.mutateBarConfig(function(bar) {
                 bar.fullscreenAutoHide = !root.fullscreenAutoHide
+              })
+            }
+          }
+
+          Button {
+            width: parent.width
+            foreground: root.barForeground
+            fontFamily: root.fontFamily
+            text: "Reset widths to defaults (100%)"
+            onClicked: {
+              barWindow.mutateBarConfig(function(bar) {
+                bar.widthPercent = 100
+                bar.widthByMonitor = {}
               })
             }
           }
@@ -1863,7 +1913,7 @@ Item {
           visible: centerRoot.hasAnchor
           entries: root.entriesBefore(centerRoot.entries, root.centerAnchor)
           region: "center"
-          anchors.right: centerAnchorModule.left
+          anchors.right: settingsGear.left
           anchors.verticalCenter: centerAnchorModule.verticalCenter
         }
 
@@ -1873,6 +1923,44 @@ Item {
           entry: centerRoot.anchorEntry
           region: "center"
           anchors.centerIn: parent
+        }
+
+        // Hover-reveal settings gear, immediately LEFT of the clock, at the
+        // end of the indicator group (caffeine, mic mute, ...) that fades in
+        // on bar hover. Click opens the settings popup. Keeps a fixed slot so
+        // the clock stays dead-center and the centering never jumps.
+        Item {
+          id: settingsGear
+          visible: centerRoot.hasAnchor
+          anchors.right: centerAnchorModule.left
+          anchors.rightMargin: Style.space(4)
+          anchors.verticalCenter: centerAnchorModule.verticalCenter
+          width: gearLabel.implicitWidth + Style.space(8)
+          height: root.barSize
+          opacity: root.barHovered ? 0.75 : 0
+
+          Behavior on opacity {
+            NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+          }
+
+          Text {
+            id: gearLabel
+            anchors.centerIn: parent
+            text: "⚙"
+            color: root.barForeground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+          }
+
+          MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: function(mouse) {
+              mouse.accepted = true
+              barWindow.settingsOpen = !barWindow.settingsOpen
+            }
+          }
         }
 
         ModuleList {
