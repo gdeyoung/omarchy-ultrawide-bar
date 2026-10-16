@@ -24,11 +24,13 @@ Or from the CLI (writes the same key, live reloads):
 
 Range is clamped to 20–100. Vertical bars ignore it.
 
-**Per-monitor widths**: `bar.widthByMonitor` overrides the global width per
-screen — full-width on the laptop panel and 60% on a docked ultrawide at the
-same time:
+**Per-monitor widths and heights**: `bar.widthByMonitor` /
+`bar.heightByMonitor` override the global width and height per screen —
+full-width 26px bar on the laptop panel, 60% 40px bar on a docked ultrawide,
+at the same time:
 
-    { "bar": { "widthPercent": 100, "widthByMonitor": { "DP-1": 60 } } }
+    { "bar": { "widthPercent": 100, "widthByMonitor": { "DP-1": 60 },
+               "heightByMonitor": { "DP-1": 40 } } }
 
 ### Height
 
@@ -56,7 +58,7 @@ stock behavior (bar drawn over fullscreen) is unchanged unless
 of the indicator group, left of the clock) for a themed settings panel:
 
 - **Position** — top / bottom / left / right
-- **Size** — width, per-monitor width for the current screen, bar height
+- **Size** — width, per-monitor width, bar height, per-monitor height
 - **Behavior** — transparent bar, fullscreen auto-hide
 
 Everything the popup writes is a documented shell.json key, so all of it is

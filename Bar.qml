@@ -564,6 +564,9 @@ Item {
   // ultrawide fork: 100 = stock full-width; <100 = centered partial width
   property int widthPercent: 100
   property var widthByMonitor: ({})
+  // per-screen thickness: { "<monitor-name>": 16-64 } — each bar can have its
+  // own height. Absent/invalid falls back to the global override, then theme.
+  property var heightByMonitor: ({})
   // opt-in: also auto-hide the full-width bar over fullscreen windows
   property bool fullscreenAutoHide: false
   // Edge-peek: pixels of a hidden bar left on-screen as a hover trigger.
@@ -600,6 +603,7 @@ Item {
     centerAnchor = Util.canonicalWidgetId(config.centerAnchor || "")
     applyWidthPercent(config.widthPercent)
     applyWidthByMonitor(config.widthByMonitor)
+    applyHeightByMonitor(config.heightByMonitor)
     applyFullscreenAutoHide(config.fullscreenAutoHide)
     applyBarHeightOverride(config.barHeight)
 
@@ -644,6 +648,27 @@ Item {
 
   function applyWidthByMonitor(value) {
     widthByMonitor = Util.isPlainObject(value) ? value : {}
+  }
+
+  // heightByMonitor mirrors widthByMonitor: each monitor's bar resolves its
+  // own thickness; a per-screen value always wins over the global one.
+  function heightForMonitor(name) {
+    var map = Util.isPlainObject(heightByMonitor) ? heightByMonitor : {}
+    var key = String(name || "")
+    if (key !== "" && map[key] !== undefined) {
+      var px = Math.round(Number(map[key]))
+      if (isFinite(px) && px >= 16 && px <= 64) return px
+    }
+    return 0
+  }
+
+  function barSizeFor(name) {
+    var px = heightForMonitor(name)
+    return px > 0 ? px : barSize
+  }
+
+  function applyHeightByMonitor(value) {
+    heightByMonitor = Util.isPlainObject(value) ? value : {}
   }
 
   function applyFullscreenAutoHide(value) {
@@ -1345,6 +1370,8 @@ Item {
     property bool screenFullscreen: false
     // Per-monitor width: this panel's override of the global widthPercent.
     readonly property int panelWidthPercent: root.widthPercentFor(screenName)
+    // Per-monitor thickness: this panel's override of the global bar height.
+    readonly property int panelBarSize: root.barSizeFor(screenName)
 
     // Edge-peek: when hidden under fullscreen, a thin strip at the screen
     // edge keeps taking pointer events; hovering it reveals the bar as an
@@ -1394,10 +1421,10 @@ Item {
       // screen instead of parking fully off-screen, so the pointer can still
       // find the bar. Hovering the strip slides the bar back in as an
       // overlay (showAsOverlay); leaving re-parks it.
-      top: barWindow.effectiveHidden && root.position === "top" && !barWindow.showAsOverlay ? -(root.barSize - root.peekZone) : 0
-      bottom: barWindow.effectiveHidden && root.position === "bottom" && !barWindow.showAsOverlay ? -(root.barSize - root.peekZone) : 0
-      left: barWindow.effectiveHidden && root.position === "left" && !barWindow.showAsOverlay ? -(root.barSize - root.peekZone) : 0
-      right: barWindow.effectiveHidden && root.position === "right" && !barWindow.showAsOverlay ? -(root.barSize - root.peekZone) : 0
+      top: barWindow.effectiveHidden && root.position === "top" && !barWindow.showAsOverlay ? -(panelBarSize - root.peekZone) : 0
+      bottom: barWindow.effectiveHidden && root.position === "bottom" && !barWindow.showAsOverlay ? -(panelBarSize - root.peekZone) : 0
+      left: barWindow.effectiveHidden && root.position === "left" && !barWindow.showAsOverlay ? -(panelBarSize - root.peekZone) : 0
+      right: barWindow.effectiveHidden && root.position === "right" && !barWindow.showAsOverlay ? -(panelBarSize - root.peekZone) : 0
     }
 
     anchors {
@@ -1411,11 +1438,11 @@ Item {
     // anchored; an explicit width makes the compositor center the surface
     // between the two un-anchored horizontal edges. Vertical bars and the
     // full-width default keep the stock anchoring above.
-    implicitWidth: root.vertical ? root.barSize
+    implicitWidth: root.vertical ? panelBarSize
       : (barWindow.panelWidthPercent < 100
         ? Math.round(screen.width * barWindow.panelWidthPercent / 100)
         : 0)
-    implicitHeight: root.vertical ? 0 : root.barSize
+    implicitHeight: root.vertical ? 0 : panelBarSize
     color: root.transparent ? "transparent" : root.background
     surfaceFormat.opaque: false
     WlrLayershell.namespace: "omarchy-bar"
@@ -1527,7 +1554,7 @@ Item {
           // Open below the bar's horizontal center (above a bottom bar),
           // clamped by the compositor via Slide adjustment.
           settingsAnchor.rect.x = Math.round(barWindow.width / 2 - pw / 2)
-          settingsAnchor.rect.y = root.position === "bottom" ? -ph - 6 : root.barSize + 6
+          settingsAnchor.rect.y = root.position === "bottom" ? -ph - 6 : panelBarSize + 6
         }
       }
 
@@ -1684,6 +1711,40 @@ Item {
             }
           }
 
+          Text {
+            width: parent.width
+            text: root.heightForMonitor(barWindow.screenName) > 0
+              ? "This screen height (" + barWindow.screenName + ") — " + settingsScreenHeightSlider.liveValue + " px"
+              : "This screen height (" + barWindow.screenName + ") — follows global"
+            color: root.barForeground
+            opacity: root.heightForMonitor(barWindow.screenName) > 0 ? 1 : 0.55
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+          }
+
+          PanelSlider {
+            id: settingsScreenHeightSlider
+            width: parent.width
+            bar: QtObject {
+              property color foreground: root.barForeground
+              property color background: root.background
+            }
+            minimum: 16
+            maximum: 64
+            step: 1
+            integer: true
+            value: root.heightForMonitor(barWindow.screenName) > 0
+              ? root.heightForMonitor(barWindow.screenName)
+              : (root.vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal)
+            onMoved: function(v) { liveValue = v }
+            onReleased: function(value) {
+              barWindow.mutateBarConfig(function(bc) {
+                if (!bc.heightByMonitor) bc.heightByMonitor = {}
+                bc.heightByMonitor[barWindow.screenName] = Math.round(value)
+              })
+            }
+          }
+
           // ---- Behavior ----------------------------------------------------
           PanelSectionHeader {
             text: "Behavior"
@@ -1722,11 +1783,13 @@ Item {
             width: parent.width
             foreground: root.barForeground
             fontFamily: root.fontFamily
-            text: "Reset widths to defaults (100%)"
+            text: "Reset size to defaults (100% width, theme height)"
             onClicked: {
               barWindow.mutateBarConfig(function(bc) {
                 bc.widthPercent = 100
                 bc.widthByMonitor = {}
+                bc.barHeight = 0
+                bc.heightByMonitor = {}
               })
             }
           }
@@ -2001,7 +2064,7 @@ Item {
           anchors.rightMargin: Style.space(4)
           anchors.verticalCenter: centerAnchorModule.verticalCenter
           width: gearLabel.implicitWidth + Style.space(8)
-          height: root.barSize
+          height: panelBarSize
           opacity: root.barHovered ? 0.75 : 0
 
           Behavior on opacity {
@@ -2262,7 +2325,7 @@ Item {
       if (hint !== undefined && hint !== null && hint > 0) return Math.round(hint)
       return Math.max(Style.space(10), Math.round((root.vertical ? slot.height : slot.width) * 0.55))
     }
-    implicitWidth: activeItem && activeItem.visible ? (root.vertical ? root.barSize : activeItem.implicitWidth) : 0
+    implicitWidth: activeItem && activeItem.visible ? (root.vertical ? panelBarSize : activeItem.implicitWidth) : 0
     implicitHeight: activeItem && activeItem.visible ? activeItem.implicitHeight : 0
     width: implicitWidth
     height: implicitHeight
