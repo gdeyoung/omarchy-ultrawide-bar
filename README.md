@@ -139,12 +139,25 @@ plugin requires the other; each works standalone.
     git clone https://github.com/gdeyoung/omarchy-ultrawide-bar.git
     cd omarchy-ultrawide-bar
     ./install.sh          # bar + width CLI
-    # ./install.sh --full # + ultrawide-mode, Super+U, Hyprland include
+    # ./install.sh --full # + ultrawide-mode, Super+U, per-monitor workspaces
 
 Requires Omarchy 4.x with the Quickshell shell. No external dependencies
 beyond Omarchy itself (hyprctl, jq, python3 — all in a stock install).
 
 Then restart the shell: `omarchy restart shell`.
+
+## What this plugin runs
+
+No sudo, no network calls, no package installs. Everything stays in
+`~/.config` and `~/.local`:
+
+| Piece | What it executes |
+| --- | --- |
+| `install.sh` | `cp` of QML/Lua files, `omarchy plugin enable/add`, `omarchy bar put/move`, one guarded include line appended to `~/.config/hypr/hyprland.lua` |
+| Bar + widgets (Quickshell) | Hyprland IPC via Quickshell's Hyprland service; reads `~/.local/state/omarchy/monitor-workspaces` (plain text); width/height settings via `omarchy bar set` |
+| `hypr/monitor-workspaces.lua` | Pure Hyprland Lua API (workspace dispatch + events), shipped by Omarchy quattro, unmodified |
+| `hypr/monitor-workspaces-hook.lua` | Loads the engine, binds `Super+1..0` / `Super+Shift+1..0` / `Super+Shift+Alt/Ctrl+arrows`; inert once the installed Omarchy ships the engine itself |
+| `bin/ultrawide-bar-width`, `bin/ultrawide-mode` | `hyprctl`/`jq` one-shots writing bar width or toggling the ultrawide mode file |
 
 ## Remove
 
