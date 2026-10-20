@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "gdeyoung.workspaces",
+  "name": "Workspaces (per-monitor)",
+  "version": "1.4.0",
+  "author": "Greg DeYoung",
+  "license": "MIT",
+  "description": "Per-monitor workspaces: each monitor's bar shows its own block of workspaces as 1..9, 0, lit only while its monitor has focus. Companion to the Omarchy per-monitor workspaces engine (backported by gdeyoung.ultrawide-bar's hypr/ hook until the platform ships it).",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "Workspaces.qml" },
+  "barWidget": {
+    "displayName": "Workspaces (per-monitor)",
+    "description": "Workspace numbers for this monitor only (per-monitor blocks)",
+    "category": "Compositor",
+    "aliases": ["workspaces", "per-monitor"],
+    "defaultSection": "left",
+    "allowMultiple": false
+  }
+}

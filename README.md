@@ -66,6 +66,40 @@ also scriptable. Toggle it from a keybind too:
 
     omarchy-shell omarchy.bar toggleSettings
 
+### Per-monitor workspaces (--full installs)
+
+Every monitor gets its own workspaces 1–10: `Super+1..0` acts on the monitor
+you're on, `Super+Shift+1..0` moves a window there (on this monitor),
+`Super+Shift+Alt+arrows` moves the whole workspace to a neighboring monitor,
+and `Super+Shift+Ctrl+arrows` moves the window. Behind the scenes Hyprland
+still numbers workspaces globally — the laptop panel owns 1–10, the next
+monitor 11–20 — and each monitor keeps its block across dock/undock, pinned to
+the panel's make/model/serial (not the connector, which docks rename).
+
+This is Omarchy's own upcoming platform feature, backported:
+
+- `hypr/monitor-workspaces.lua` is Omarchy's engine
+  (`default/hypr/monitor-workspaces.lua`, quattro branch, unmodified),
+  installed to `~/.config/hypr/`.
+- `hypr/monitor-workspaces-hook.lua` loads it and binds the quattro workspace
+  keys — **only while the installed Omarchy lacks the engine**. The day the
+  package ships it, the hook goes inert and the platform's engine and bindings
+  take over (same state file, monitors keep their blocks). Then remove
+  `~/.config/hypr/monitor-workspaces*.lua` and their include line from
+  `~/.config/hypr/hyprland.lua`.
+- The bar's Workspaces widget ships as its own plugin, `gdeyoung.workspaces`
+  (the `omarchy.*` widget namespace is reserved for first-party plugins), and
+  replaces the stock widget in the bar. Each monitor's bar shows only its own
+  block, labeled 1–9, 0, lit while that monitor has focus; a workspace
+  stranded on this monitor from another block shows as `(n)`.
+
+The engine's block assignments live in `~/.local/state/omarchy/monitor-workspaces`.
+Window rules that name a workspace number use the real id: `15` is the second
+monitor's 5.
+
+Modeled on [vladgabrielboca/omarchy-monitor-workspaces](https://github.com/vladgabrielboca/omarchy-monitor-workspaces)
+(@ 3ae76b2) and [omacom/omarchy#10372](https://github.com/omacom/omarchy/issues/10372).
+
 ## Why a fork
 
 The stock bar anchors both horizontal edges of its layer-shell surface —
@@ -122,8 +156,16 @@ Everything the installer touches, in reverse:
     rm -rf ~/.config/omarchy/plugins/gdeyoung.ultrawide-bar
     rm -f ~/.config/hypr/ultrawide-mode.lua
     rm -rf ~/.local/state/ultrawide-mode
-    # then, if you ran --full, delete the two "ultrawide" lines from
-    # ~/.config/hypr/hyprland.lua and the Super+U line from ~/.config/hypr/bindings.lua
+    # per-monitor workspaces (--full): back to the stock widget + keys
+    omarchy plugin enable omarchy.workspaces
+    omarchy plugin remove gdeyoung.workspaces --yes
+    omarchy bar put omarchy.workspaces --after omarchy.menu
+    rm -f ~/.config/hypr/monitor-workspaces.lua ~/.config/hypr/monitor-workspaces-hook.lua
+    rm -f ~/.local/state/omarchy/monitor-workspaces ~/.local/state/omarchy/monitor-workspaces-merged
+    # then, if you ran --full, delete the two "ultrawide" lines and the
+    # "monitor-workspaces" line from ~/.config/hypr/hyprland.lua, and the
+    # Super+U line from ~/.config/hypr/bindings.lua, then:
+    hyprctl reload
     omarchy restart shell
 
 ## License
