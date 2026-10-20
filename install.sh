@@ -42,11 +42,11 @@ fi
 # gdeyoung.* id and replaces the stock omarchy.workspaces slot) --------------
 widget_id="gdeyoung.workspaces"
 widget_dir="$HOME/.config/omarchy/plugins/$widget_id"
-if [[ -f "$repo_dir/widget/manifest.json" ]]; then
+if [[ -f "$repo_dir/plugins/gdeyoung.workspaces/manifest.json" ]]; then
   mkdir -p "$widget_dir"
-  install -m 644 "$repo_dir/widget/manifest.json"      "$widget_dir/manifest.json"
-  install -m 644 "$repo_dir/widget/Workspaces.qml"     "$widget_dir/Workspaces.qml"
-  install -m 644 "$repo_dir/widget/WorkspacesModel.js" "$widget_dir/WorkspacesModel.js"
+  install -m 644 "$repo_dir/plugins/gdeyoung.workspaces/manifest.json"      "$widget_dir/manifest.json"
+  install -m 644 "$repo_dir/plugins/gdeyoung.workspaces/Workspaces.qml"     "$widget_dir/Workspaces.qml"
+  install -m 644 "$repo_dir/plugins/gdeyoung.workspaces/WorkspacesModel.js" "$widget_dir/WorkspacesModel.js"
 fi
 
 # width CLI: plugin-local copy first, PATH symlink second

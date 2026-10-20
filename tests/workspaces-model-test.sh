@@ -6,7 +6,7 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 command -v node >/dev/null || { echo "SKIP: node not installed"; exit 0; }
-node - "$ROOT/widget/WorkspacesModel.js" <<'JS'
+node - "$ROOT/plugins/gdeyoung.workspaces/WorkspacesModel.js" <<'JS'
 const fs = require("fs")
 const src = fs.readFileSync(process.argv[2], "utf8")
 const M = new Function(src + "; return { BLOCK, ALWAYS_SHOWN, firstWorkspace, visibleIds, slotLabel, plain, parseBlocks, builtinFirst }")()
