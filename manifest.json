@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "gdeyoung.ultrawide-bar",
   "name": "Ultrawide Bar",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "author": "Greg DeYoung",
   "license": "MIT",
-  "description": "Fork of the stock Omarchy bar: partial width (center-anchored) for ultrawides, per-monitor widths, per-monitor workspaces (quattro engine backport), fullscreen auto-hide with edge-peek, right-click settings popup.",
+  "description": "Fork of the stock Omarchy bar: partial width (center-anchored) for ultrawides, per-monitor widths and heights, per-monitor workspaces widget (native 4.5 engine), fullscreen auto-hide with edge-peek, right-click settings popup.",
   "kinds": [
     "bar"
   ],
